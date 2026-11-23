@@ -1,12 +1,12 @@
-
+\
 const express = require("express");
 
 const app = express();
 const PORT = 3000;
 
-
 app.use(express.json());
 
+// Initial book data
 let books = [
     {
         id: 101,
@@ -34,72 +34,88 @@ let books = [
     }
 ];
 
+// Function to check book details
+function validateBook(book) {
+    if (!book || typeof book !== "object" || Array.isArray(book)) {
+        return false;
+    }
 
-function isValidBook(book) {
-    return (
-        book &&
-        typeof book === "object" &&
-        !Array.isArray(book) &&
-        typeof book.title === "string" &&
-        book.title.trim() !== "" &&
-        typeof book.author === "string" &&
-        book.author.trim() !== "" &&
-        typeof book.genre === "string" &&
-        book.genre.trim() !== "" &&
-        Number.isInteger(book.publishedYear) &&
-        book.publishedYear > 0 &&
-        typeof book.available === "boolean"
-    );
+    if (
+        typeof book.title !== "string" ||
+        book.title.trim() === "" ||
+        typeof book.author !== "string" ||
+        book.author.trim() === "" ||
+        typeof book.genre !== "string" ||
+        book.genre.trim() === "" ||
+        !Number.isInteger(book.publishedYear) ||
+        book.publishedYear <= 0 ||
+        typeof book.available !== "boolean"
+    ) {
+        return false;
+    }
+
+    return true;
 }
 
+// 1. Get all books
 app.get("/api/books", (req, res) => {
     res.status(200).json(books);
 });
 
+// 2. Add a new book
 app.post("/api/books", (req, res) => {
-    const newBook = req.body;
+    const book = req.body;
 
-    if (!isValidBook(newBook)) {
+    if (!validateBook(book)) {
         return res.status(400).json({
-            message: "Invalid book data. Please provide all required fields."
+            message: "Please enter valid book details."
         });
     }
 
-    const newId = Math.max(...books.map(book => book.id), 100) + 1;
+    let newId = 101;
 
-    const book = {
-        ...newBook,
-        id: newId
+    for (let i = 0; i < books.length; i++) {
+        if (books[i].id >= newId) {
+            newId = books[i].id + 1;
+        }
+    }
+
+    const newBook = {
+        id: newId,
+        title: book.title,
+        author: book.author,
+        genre: book.genre,
+        publishedYear: book.publishedYear,
+        available: book.available
     };
 
-    books.push(book);
+    books.push(newBook);
 
-    res.status(201).json({
-        message: "Book added successfully.",
-        book: book
-    });
+    res.status(201).json(newBook);
 });
 
+// 3. Filter books by author
 app.get("/api/books/filter", (req, res) => {
     const author = req.query.author;
 
-    if (!author || typeof author !== "string") {
+    if (typeof author !== "string" || author.trim() === "") {
         return res.status(400).json({
-            message: "Please provide an author query parameter."
+            message: "Please provide an author name."
         });
     }
 
-    const filteredBooks = books.filter(book =>
-        book.author.toLowerCase().includes(author.trim().toLowerCase())
-    );
+    const result = books.filter((book) => {
+        return book.author.toLowerCase().includes(author.trim().toLowerCase());
+    });
 
-    res.status(200).json(filteredBooks);
+    res.status(200).json(result);
 });
 
+// 4. Get a book using its ID
 app.get("/api/books/:id", (req, res) => {
     const id = Number(req.params.id);
 
-    const book = books.find(book => book.id === id);
+    const book = books.find((b) => b.id === id);
 
     if (!Number.isInteger(id) || !book) {
         return res.status(404).json({
@@ -110,10 +126,11 @@ app.get("/api/books/:id", (req, res) => {
     res.status(200).json(book);
 });
 
+// 5. Update a book
 app.put("/api/books/:id", (req, res) => {
     const id = Number(req.params.id);
 
-    const index = books.findIndex(book => book.id === id);
+    const index = books.findIndex((b) => b.id === id);
 
     if (!Number.isInteger(id) || index === -1) {
         return res.status(404).json({
@@ -123,27 +140,29 @@ app.put("/api/books/:id", (req, res) => {
 
     const updatedBook = req.body;
 
-    if (!isValidBook(updatedBook)) {
+    if (!validateBook(updatedBook)) {
         return res.status(400).json({
-            message: "Invalid book data. Please provide all required fields."
+            message: "Please enter valid book details."
         });
     }
 
     books[index] = {
-        ...updatedBook,
-        id: id
+        id: id,
+        title: updatedBook.title,
+        author: updatedBook.author,
+        genre: updatedBook.genre,
+        publishedYear: updatedBook.publishedYear,
+        available: updatedBook.available
     };
 
-    res.status(200).json({
-        message: "Book updated successfully.",
-        book: books[index]
-    });
+    res.status(200).json(books[index]);
 });
 
+// 6. Delete a book
 app.delete("/api/books/:id", (req, res) => {
     const id = Number(req.params.id);
 
-    const index = books.findIndex(book => book.id === id);
+    const index = books.findIndex((b) => b.id === id);
 
     if (!Number.isInteger(id) || index === -1) {
         return res.status(404).json({
@@ -158,16 +177,20 @@ app.delete("/api/books/:id", (req, res) => {
     });
 });
 
+// Handle invalid JSON
 app.use((err, req, res, next) => {
-    if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
+    if (err instanceof SyntaxError && err.status === 400) {
         return res.status(400).json({
             message: "Invalid JSON format."
         });
     }
 
-    next(err);
+    res.status(500).json({
+        message: "Internal server error."
+    });
 });
 
+// Start the server
 app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+    console.log("Server is running on port " + PORT);
 });
